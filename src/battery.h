@@ -23,9 +23,12 @@ namespace YOBA {
 	>
 	class Battery {
 		public:
-			Battery(adc_oneshot_unit_handle_t* ADCOneshotUnit
+			Battery(
+				adc_oneshot_unit_handle_t* ADCOneshotUnit,
+				SemaphoreHandle_t* ADCMutex
 			) :
-				_ADCOneshotUnit(ADCOneshotUnit)
+				_ADCOneshotUnit(ADCOneshotUnit),
+				_ADCMutex(ADCMutex)
 			{
 				static_assert(voltageMaxMV * voltageDividerR2 / (voltageDividerR1 + voltageDividerR2) <= 3300, "Retard alert: output voltage is too high for ADC reading");
 			}
@@ -83,6 +86,7 @@ namespace YOBA {
 
 		private:
 			adc_oneshot_unit_handle_t* _ADCOneshotUnit;
+			SemaphoreHandle_t* _ADCMutex;
 
 			adc_cali_handle_t _caliHandle {};
 			uint32_t _sampleSum = 0;
@@ -91,9 +95,15 @@ namespace YOBA {
 
 			[[noreturn]] void onStart() {
 				while (true) {
-					int sample;
+					if (xSemaphoreTake(*_ADCMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+						ESP_LOGI("axis", "read sem timeout");
+						continue;
+					}
 
+					int sample;
 					const auto error = adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, ADCChannel, &sample);
+
+					xSemaphoreGive(*_ADCMutex);
 
 					// Timeout one same oneshot unit?
 					if (error != ESP_OK) {
