@@ -58,12 +58,12 @@ namespace YOBA {
 				if (_voltage <= voltageMinMV) {
 					return 0;
 				}
-				else if (_voltage >= voltageMaxMV) {
+
+				if (_voltage >= voltageMaxMV) {
 					return 0xFF;
 				}
-				else {
-					return static_cast<uint8_t>((_voltage - voltageMinMV) * 0xFF / (voltageMaxMV - voltageMinMV));
-				}
+
+				return static_cast<uint8_t>((_voltage - voltageMinMV) * 0xFF / (voltageMaxMV - voltageMinMV));
 			}
 
 			uint16_t getVoltage() const {
