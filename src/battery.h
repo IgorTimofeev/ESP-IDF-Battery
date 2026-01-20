@@ -9,6 +9,7 @@ namespace YOBA {
 		public:
 			Battery(
 				const adc_unit_t ADCUnit,
+				adc_oneshot_unit_handle_t* ADCOneshotUnit,
 				const adc_channel_t ADCChannel,
 
 				const uint16_t voltageMin,
@@ -17,6 +18,7 @@ namespace YOBA {
 				const uint32_t voltageDividerR2
 			) :
 				_ADCUnit(ADCUnit),
+				_ADCOneshotUnit(ADCOneshotUnit),
 				_ADCChannel(ADCChannel),
 
 				_voltageMin(voltageMin),
@@ -28,23 +30,17 @@ namespace YOBA {
 			}
 
 			void setup() {
-				adc_oneshot_unit_init_cfg_t ADC1UnitConfig {};
-				ADC1UnitConfig.unit_id = _ADCUnit;
-				ADC1UnitConfig.clk_src = ADC_RTC_CLK_SRC_DEFAULT;
-				ADC1UnitConfig.ulp_mode = ADC_ULP_MODE_DISABLE;
-				ESP_ERROR_CHECK(adc_oneshot_new_unit(&ADC1UnitConfig, &_ADCOneshotUnitHandle));
-
 				adc_oneshot_chan_cfg_t channelConfig {};
 				channelConfig.atten = ADC_ATTEN_DB_12;
 				channelConfig.bitwidth = ADC_BITWIDTH_12;
-				ESP_ERROR_CHECK(adc_oneshot_config_channel(_ADCOneshotUnitHandle, _ADCChannel, &channelConfig));
+				ESP_ERROR_CHECK(adc_oneshot_config_channel(*_ADCOneshotUnit, _ADCChannel, &channelConfig));
 
 				#ifdef ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
 					adc_cali_curve_fitting_config_t fittingConfig {};
 					fittingConfig.unit_id = _ADCUnit;
 					fittingConfig.atten = ADC_ATTEN_DB_12;
 					fittingConfig.bitwidth = ADC_BITWIDTH_DEFAULT;
-					ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&fittingConfig, const_cast<adc_cali_handle_t*>(&_caliHandle)));
+					ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&fittingConfig, &_caliHandle));
 
 				#else
 					adc_cali_line_fitting_config_t fittingConfig {};
@@ -52,7 +48,7 @@ namespace YOBA {
 					fittingConfig.atten = ADC_ATTEN_DB_12;
 					fittingConfig.bitwidth = ADC_BITWIDTH_DEFAULT;
 					fittingConfig.default_vref = ADC_CALI_LINE_FITTING_EFUSE_VAL_DEFAULT_VREF;
-					ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&fittingConfig, const_cast<adc_cali_handle_t*>(&_caliHandle)));
+					ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&fittingConfig, &_caliHandle));
 
 				#endif
 			}
@@ -61,7 +57,7 @@ namespace YOBA {
 				// Multisampling
 				int sample;
 
-				ESP_ERROR_CHECK(adc_oneshot_get_calibrated_result(_ADCOneshotUnitHandle, _caliHandle, _ADCChannel, &sample));
+				ESP_ERROR_CHECK(adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, _ADCChannel, &sample));
 
 				_sampleSum += sample;
 				_sampleIndex++;
@@ -98,6 +94,7 @@ namespace YOBA {
 
 		private:
 			adc_unit_t _ADCUnit;
+			adc_oneshot_unit_handle_t* _ADCOneshotUnit;
 			adc_channel_t _ADCChannel;
 
 			uint16_t _voltageMin;
@@ -106,7 +103,6 @@ namespace YOBA {
 			uint32_t _voltageDividerR2;
 
 			adc_cali_handle_t _caliHandle {};
-			adc_oneshot_unit_handle_t _ADCOneshotUnitHandle {};
 
 			constexpr static uint8_t _sampleCount = 8;
 			uint32_t _sampleSum = 0;
