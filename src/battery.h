@@ -93,7 +93,13 @@ namespace YOBA {
 				while (true) {
 					int sample;
 
-					ESP_ERROR_CHECK(adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, ADCChannel, &sample));
+					const auto error = adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, ADCChannel, &sample);
+
+					// Timeout one same oneshot unit?
+					if (error != ESP_OK) {
+						ESP_ERROR_CHECK_WITHOUT_ABORT(error);
+						continue;
+					}
 
 					_sampleSum += sample;
 					_sampleIndex++;
