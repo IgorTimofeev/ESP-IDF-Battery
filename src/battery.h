@@ -103,7 +103,7 @@ namespace YOBA {
 
 				_voltage = voltage;
 
-				_tickTime = esp_timer_get_time() + 1'000'000 / tickRateHz;
+				_tickTime = esp_timer_get_time() + 1'000'000 / (tickRateHz * multisamplingThreshold);
 			}
 
 		private:
