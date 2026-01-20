@@ -2,9 +2,8 @@
 
 #include <algorithm>
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <esp_adc/adc_oneshot.h>
 #include <esp_adc/adc_cali.h>
 
@@ -24,11 +23,9 @@ namespace YOBA {
 	class Battery {
 		public:
 			Battery(
-				adc_oneshot_unit_handle_t* ADCOneshotUnit,
-				SemaphoreHandle_t* ADCMutex
+				adc_oneshot_unit_handle_t* ADCOneshotUnit
 			) :
-				_ADCOneshotUnit(ADCOneshotUnit),
-				_ADCMutex(ADCMutex)
+				_ADCOneshotUnit(ADCOneshotUnit)
 			{
 				static_assert(voltageMaxMV * voltageDividerR2 / (voltageDividerR1 + voltageDividerR2) <= 3300, "Retard alert: output voltage is too high for ADC reading");
 			}
@@ -55,17 +52,6 @@ namespace YOBA {
 					ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&fittingConfig, &_caliHandle));
 
 				#endif
-
-				xTaskCreate(
-					[](void* arg) {
-						static_cast<Battery*>(arg)->onStart();
-					},
-					"Battery",
-					2 * 1024,
-					this,
-					1,
-					nullptr
-				);
 			}
 
 			uint8_t getCharge() const {
@@ -84,55 +70,49 @@ namespace YOBA {
 				return _voltage;
 			}
 
+			void tick() {
+				if (esp_timer_get_time() < _tickTime)
+					return;
+
+				int sample;
+				const auto error = adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, ADCChannel, &sample);
+
+				// Timeout one same oneshot unit?
+				if (error != ESP_OK) {
+					ESP_ERROR_CHECK_WITHOUT_ABORT(error);
+					return;
+				}
+
+				_sampleSum += sample;
+				_sampleIndex++;
+
+				if (_sampleIndex < multisamplingThreshold)
+					return;
+
+				uint16_t voltage = _sampleSum / multisamplingThreshold;
+
+				_sampleSum = 0;
+				_sampleIndex = 0;
+
+				// ESP_LOGI("bat", "voltage before: %d", voltage);
+
+				// Restoring real battery voltage based on dividers
+				voltage = voltage * (voltageDividerR1 + voltageDividerR2) / voltageDividerR2;
+
+				// ESP_LOGI("bat", "voltage after: %d", voltage);
+
+				_voltage = voltage;
+
+				_tickTime = esp_timer_get_time() + 1'000'000 / tickRateHz;
+			}
+
 		private:
 			adc_oneshot_unit_handle_t* _ADCOneshotUnit;
-			SemaphoreHandle_t* _ADCMutex;
 
 			adc_cali_handle_t _caliHandle {};
 			uint32_t _sampleSum = 0;
 			uint8_t _sampleIndex = 0;
 			uint16_t _voltage = 0;
-
-			[[noreturn]] void onStart() {
-				while (true) {
-					if (xSemaphoreTake(*_ADCMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-						ESP_LOGI("axis", "read sem timeout");
-						continue;
-					}
-
-					int sample;
-					const auto error = adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, ADCChannel, &sample);
-
-					xSemaphoreGive(*_ADCMutex);
-
-					// Timeout one same oneshot unit?
-					if (error != ESP_OK) {
-						ESP_ERROR_CHECK_WITHOUT_ABORT(error);
-						continue;
-					}
-
-					_sampleSum += sample;
-					_sampleIndex++;
-
-					if (_sampleIndex < multisamplingThreshold)
-						continue;
-
-					uint16_t voltage = _sampleSum / multisamplingThreshold;
-
-					_sampleSum = 0;
-					_sampleIndex = 0;
-
-					// ESP_LOGI("bat", "voltage before: %d", voltage);
-
-					// Restoring real battery voltage based on dividers
-					voltage = voltage * (voltageDividerR1 + voltageDividerR2) / voltageDividerR2;
-
-					// ESP_LOGI("bat", "voltage after: %d", voltage);
-
-					_voltage = voltage;
-
-					vTaskDelay(pdMS_TO_TICKS(std::max<uint16_t>(1'000 / (tickRateHz * multisamplingThreshold), portTICK_PERIOD_MS)));
-				}
-			}
+			int64_t _tickTime = 0;
 	};
 }
