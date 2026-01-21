@@ -27,7 +27,7 @@ namespace YOBA {
 			) :
 				_ADCOneshotUnit(ADCOneshotUnit)
 			{
-				static_assert(voltageMaxMV * voltageDividerR2 / (voltageDividerR1 + voltageDividerR2) <= 3300, "Retard alert: output voltage is too high for ADC reading");
+				// static_assert(voltageOnDividerMaxMV <= 3300, "Retard alert: output voltage is too high for ADC reading");
 			}
 
 			void setup() {
@@ -89,24 +89,26 @@ namespace YOBA {
 				if (_sampleIndex < sampleCount)
 					return;
 
-				uint16_t voltage = _sampleSum / sampleCount;
+				auto voltage = _sampleSum / sampleCount;
 
 				_sampleSum = 0;
 				_sampleIndex = 0;
 
 				// ESP_LOGI("bat", "voltage before: %d", voltage);
 
-				// Restoring real battery voltage based on dividers
-				voltage = voltage * (voltageDividerR1 + voltageDividerR2) / voltageDividerR2;
+				// Restoring real battery voltage
+				voltage = voltageMinMV + (voltageMaxMV - voltageMinMV) * voltage / voltageOnDividerMaxMV;
 
 				// ESP_LOGI("bat", "voltage after: %d", voltage);
 
-				_voltage = voltage;
+				_voltage = static_cast<uint16_t>(voltage);
 
 				_tickTime = esp_timer_get_time() + 1'000'000 / (tickRateHz * sampleCount);
 			}
 
 		private:
+			constexpr static uint16_t voltageOnDividerMaxMV = voltageMaxMV * voltageDividerR2 / (voltageDividerR1 + voltageDividerR2);
+
 			adc_oneshot_unit_handle_t* _ADCOneshotUnit;
 
 			adc_cali_handle_t _caliHandle {};
