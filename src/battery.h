@@ -18,7 +18,7 @@ namespace YOBA {
 		uint32_t voltageDividerR2,
 
 		uint16_t tickRateHz = 1,
-		uint8_t multisamplingThreshold = 8
+		uint8_t sampleCount = 8
 	>
 	class Battery {
 		public:
@@ -86,10 +86,10 @@ namespace YOBA {
 				_sampleSum += sample;
 				_sampleIndex++;
 
-				if (_sampleIndex < multisamplingThreshold)
+				if (_sampleIndex < sampleCount)
 					return;
 
-				uint16_t voltage = _sampleSum / multisamplingThreshold;
+				uint16_t voltage = _sampleSum / sampleCount;
 
 				_sampleSum = 0;
 				_sampleIndex = 0;
@@ -103,7 +103,7 @@ namespace YOBA {
 
 				_voltage = voltage;
 
-				_tickTime = esp_timer_get_time() + 1'000'000 / (tickRateHz * multisamplingThreshold);
+				_tickTime = esp_timer_get_time() + 1'000'000 / (tickRateHz * sampleCount);
 			}
 
 		private:
