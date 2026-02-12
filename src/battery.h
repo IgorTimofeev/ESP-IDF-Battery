@@ -17,7 +17,6 @@ namespace YOBA {
 		uint32_t voltageDividerR1,
 		uint32_t voltageDividerR2,
 
-		uint16_t tickRateHz = 1,
 		uint8_t sampleCount = 8
 	>
 	class Battery {
@@ -71,9 +70,6 @@ namespace YOBA {
 			}
 
 			void tick() {
-				if (esp_timer_get_time() < _tickTime)
-					return;
-
 				int sample;
 				const auto error = adc_oneshot_get_calibrated_result(*_ADCOneshotUnit, _caliHandle, ADCChannel, &sample);
 
@@ -102,8 +98,6 @@ namespace YOBA {
 				// ESP_LOGI("bat", "voltage after: %d", voltage);
 
 				_voltage = static_cast<uint16_t>(voltage);
-
-				_tickTime = esp_timer_get_time() + 1'000'000 / (tickRateHz * sampleCount);
 			}
 
 		private:
@@ -115,6 +109,5 @@ namespace YOBA {
 			uint32_t _sampleSum = 0;
 			uint8_t _sampleIndex = 0;
 			uint16_t _voltage = 0;
-			int64_t _tickTime = 0;
 	};
 }
