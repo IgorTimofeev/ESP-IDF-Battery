@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.22)
 
 if(ESP_PLATFORM)
     file(GLOB_RECURSE YOBA_SOURCES
@@ -12,6 +12,8 @@ if(ESP_PLATFORM)
             esp_timer
             esp_driver_gpio
     )
+
+    target_compile_options(${COMPONENT_LIB} PUBLIC -std=gnu++26)
 
     return()
 endif()
